@@ -27,17 +27,33 @@ Hardware/synthwave aesthetic — amber for data, cyan for transport, pink for fo
 
 ## Build & Run
 
-Requires Rust (1.70+). macOS with CoreAudio is the primary target.
+Requires Rust (1.70+). macOS with CoreAudio is the primary target; Linux with ALSA is also supported.
 
 ```bash
 cargo build --release
 cargo run --release
 ```
 
+On Linux, install ALSA development headers first:
+
+```bash
+sudo apt-get install libasound2-dev   # Debian/Ubuntu
+```
+
 Run the tests:
 
 ```bash
 cargo test
+```
+
+### Pre-built Binaries
+
+Pre-built binaries for macOS (ARM, x86_64, universal) and Linux (x86_64) are available from [GitHub Actions](../../actions) artifacts.
+
+**macOS note:** Downloaded binaries will be blocked by Gatekeeper. Remove the quarantine flag before running:
+
+```bash
+xattr -d com.apple.quarantine ./textstep
 ```
 
 ## Quick Manual
