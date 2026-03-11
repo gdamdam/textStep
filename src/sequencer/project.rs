@@ -1,0 +1,1160 @@
+// Project: bundles a drum kit + 10 patterns into a single saveable unit.
+
+use serde::{Deserialize, Serialize};
+use std::path::PathBuf;
+
+use crate::params::EffectParams;
+use crate::sequencer::drum_pattern::{
+    DrumTrackParams, DrumTrackId, MAX_STEPS, NUM_DRUM_TRACKS, TRACK_IDS,
+};
+use super::synth_pattern::{
+    SynthParams, SynthPattern, SynthStep,
+    MAX_STEPS as SYNTH_MAX_STEPS,
+};
+
+pub const NUM_PATTERNS: usize = 10;
+pub const NUM_KITS: usize = 8;
+
+// ── Serializable sound params (no mute/solo) ───────────────────────────────
+
+#[derive(Clone, Copy, Debug, Serialize, Deserialize)]
+pub struct DrumSoundParams {
+    #[serde(default = "default_half")]
+    pub tune: f32,
+    #[serde(default = "default_third")]
+    pub sweep: f32,
+    #[serde(default = "default_half")]
+    pub color: f32,
+    #[serde(default = "default_third")]
+    pub snap: f32,
+    #[serde(default = "default_half")]
+    pub filter: f32,
+    #[serde(default)]
+    pub drive: f32,
+    #[serde(default = "default_half")]
+    pub decay: f32,
+    #[serde(default = "default_volume")]
+    pub volume: f32,
+    #[serde(default)]
+    pub send_reverb: f32,
+    #[serde(default)]
+    pub send_delay: f32,
+    #[serde(default = "default_half")]
+    pub pan: f32,
+}
+
+fn default_half() -> f32 { 0.5 }
+fn default_third() -> f32 { 0.3 }
+fn default_volume() -> f32 { 0.8 }
+
+impl Default for DrumSoundParams {
+    fn default() -> Self {
+        Self {
+            tune: 0.5, sweep: 0.3, color: 0.5, snap: 0.3,
+            filter: 0.5, drive: 0.0, decay: 0.5, volume: 0.8,
+            send_reverb: 0.0, send_delay: 0.0, pan: 0.5,
+        }
+    }
+}
+
+impl DrumSoundParams {
+    pub fn defaults_for(track: DrumTrackId) -> Self {
+        let p = DrumTrackParams::defaults_for(track);
+        Self {
+            tune: p.tune, sweep: p.sweep, color: p.color, snap: p.snap,
+            filter: p.filter, drive: p.drive, decay: p.decay, volume: p.volume,
+            send_reverb: p.send_reverb, send_delay: p.send_delay, pan: p.pan,
+        }
+    }
+
+    pub fn to_track_params(self) -> DrumTrackParams {
+        DrumTrackParams {
+            tune: self.tune, sweep: self.sweep, color: self.color, snap: self.snap,
+            filter: self.filter, drive: self.drive, decay: self.decay, volume: self.volume,
+            send_reverb: self.send_reverb, send_delay: self.send_delay, pan: self.pan,
+            mute: false, solo: false,
+        }
+    }
+
+    pub fn from_track_params(p: &DrumTrackParams) -> Self {
+        Self {
+            tune: p.tune, sweep: p.sweep, color: p.color, snap: p.snap,
+            filter: p.filter, drive: p.drive, decay: p.decay, volume: p.volume,
+            send_reverb: p.send_reverb, send_delay: p.send_delay, pan: p.pan,
+        }
+    }
+}
+
+// ── Genre Kit Presets ────────────────────────────────────────────────────────
+
+/// Helper: build a DrumSoundParams from (tune, sweep, color, snap, filter, drive, decay, volume, send_reverb, send_delay).
+fn ds(t: f32, sw: f32, c: f32, sn: f32, f: f32, dr: f32, dc: f32, v: f32, sr: f32, sd: f32) -> DrumSoundParams {
+    DrumSoundParams { tune: t, sweep: sw, color: c, snap: sn, filter: f, drive: dr, decay: dc, volume: v, send_reverb: sr, send_delay: sd, pan: 0.5 }
+}
+
+/// Build a named kit from 8 DrumSoundParams (one per voice in TRACK_IDS order).
+fn make_kit(name: &str, voices: [DrumSoundParams; 8]) -> DrumKit {
+    let tracks = TRACK_IDS.iter().zip(voices.iter()).map(|(&id, params)| KitTrack {
+        id: id.name().to_lowercase(),
+        params: *params,
+    }).collect();
+    DrumKit { name: name.to_string(), tracks }
+}
+
+/// 8 genre-specific drum kits with hand-tuned parameters.
+pub fn genre_kits() -> Vec<DrumKit> {
+    vec![
+        // Kit 1: 808 — deep, boomy, analog warmth
+        make_kit("808", [
+            //       tune  sweep color snap  filt  drive decay vol   rvb   dly
+            ds(0.20, 0.70, 0.15, 0.10, 0.50, 0.10, 0.80, 0.85, 0.05, 0.00), // Kick
+            ds(0.35, 0.15, 0.50, 0.40, 0.50, 0.10, 0.40, 0.80, 0.15, 0.00), // Snare
+            ds(0.60, 0.00, 0.50, 0.40, 0.65, 0.00, 0.08, 0.70, 0.05, 0.00), // CHH
+            ds(0.50, 0.00, 0.50, 0.30, 0.55, 0.00, 0.50, 0.65, 0.10, 0.00), // OHH
+            ds(0.55, 0.00, 0.45, 0.15, 0.50, 0.00, 0.70, 0.55, 0.10, 0.00), // Ride
+            ds(0.50, 0.30, 0.50, 0.50, 0.50, 0.10, 0.40, 0.70, 0.20, 0.00), // Clap
+            ds(0.50, 0.30, 0.50, 0.20, 0.50, 0.10, 0.40, 0.70, 0.10, 0.00), // Cowbell
+            ds(0.30, 0.60, 0.10, 0.30, 0.70, 0.10, 0.55, 0.80, 0.10, 0.00), // Tom
+        ]),
+        // Kit 2: 909 — punchy, crisp, harder-hitting
+        make_kit("909", [
+            ds(0.35, 0.50, 0.30, 0.60, 0.80, 0.30, 0.45, 0.85, 0.05, 0.00), // Kick
+            ds(0.45, 0.10, 0.60, 0.60, 0.65, 0.20, 0.35, 0.85, 0.15, 0.00), // Snare
+            ds(0.55, 0.00, 0.55, 0.35, 0.70, 0.10, 0.12, 0.70, 0.05, 0.00), // CHH
+            ds(0.55, 0.00, 0.55, 0.35, 0.65, 0.10, 0.55, 0.70, 0.10, 0.00), // OHH
+            ds(0.60, 0.00, 0.50, 0.25, 0.60, 0.10, 0.65, 0.60, 0.10, 0.00), // Ride
+            ds(0.55, 0.25, 0.55, 0.60, 0.60, 0.15, 0.35, 0.75, 0.20, 0.00), // Clap
+            ds(0.55, 0.25, 0.45, 0.30, 0.60, 0.10, 0.35, 0.65, 0.10, 0.00), // Cowbell
+            ds(0.50, 0.70, 0.20, 0.50, 0.70, 0.20, 0.45, 0.75, 0.10, 0.00), // Tom
+        ]),
+        // Kit 3: Techno — dark, driving, industrial-leaning
+        make_kit("Techno", [
+            ds(0.22, 0.75, 0.25, 0.55, 0.60, 0.35, 0.70, 0.90, 0.05, 0.00), // Kick
+            ds(0.38, 0.10, 0.70, 0.65, 0.55, 0.35, 0.25, 0.75, 0.15, 0.00), // Snare
+            ds(0.50, 0.05, 0.60, 0.50, 0.55, 0.25, 0.06, 0.65, 0.05, 0.00), // CHH
+            ds(0.45, 0.10, 0.65, 0.40, 0.50, 0.30, 0.40, 0.60, 0.10, 0.15), // OHH
+            ds(0.50, 0.05, 0.60, 0.30, 0.45, 0.30, 0.55, 0.50, 0.10, 0.10), // Ride
+            ds(0.48, 0.20, 0.60, 0.70, 0.55, 0.30, 0.30, 0.75, 0.15, 0.00), // Clap
+            ds(0.55, 0.35, 0.55, 0.40, 0.50, 0.35, 0.25, 0.60, 0.10, 0.10), // Cowbell
+            ds(0.35, 0.75, 0.30, 0.55, 0.55, 0.35, 0.50, 0.75, 0.10, 0.00), // Tom
+        ]),
+        // Kit 4: House — classic house, warm and bouncy
+        make_kit("House", [
+            ds(0.28, 0.60, 0.20, 0.45, 0.65, 0.15, 0.60, 0.85, 0.05, 0.00), // Kick
+            ds(0.42, 0.10, 0.55, 0.50, 0.60, 0.15, 0.38, 0.78, 0.15, 0.00), // Snare
+            ds(0.58, 0.00, 0.45, 0.35, 0.65, 0.05, 0.10, 0.68, 0.05, 0.00), // CHH
+            ds(0.52, 0.00, 0.45, 0.30, 0.60, 0.05, 0.50, 0.65, 0.10, 0.00), // OHH
+            ds(0.58, 0.00, 0.40, 0.20, 0.55, 0.05, 0.65, 0.55, 0.10, 0.00), // Ride
+            ds(0.52, 0.30, 0.50, 0.55, 0.55, 0.10, 0.42, 0.72, 0.25, 0.00), // Clap
+            ds(0.55, 0.25, 0.40, 0.25, 0.55, 0.05, 0.35, 0.60, 0.10, 0.00), // Cowbell
+            ds(0.45, 0.55, 0.15, 0.40, 0.75, 0.10, 0.50, 0.75, 0.10, 0.00), // Tom
+        ]),
+        // Kit 5: Minimal — clean, sparse, subtle
+        make_kit("Minimal", [
+            ds(0.38, 0.30, 0.10, 0.75, 0.65, 0.00, 0.20, 0.75, 0.05, 0.10), // Kick
+            ds(0.50, 0.00, 0.35, 0.70, 0.75, 0.00, 0.15, 0.65, 0.10, 0.15), // Snare
+            ds(0.72, 0.00, 0.30, 0.25, 0.85, 0.00, 0.04, 0.55, 0.05, 0.10), // CHH
+            ds(0.65, 0.00, 0.30, 0.20, 0.60, 0.00, 0.25, 0.50, 0.10, 0.15), // OHH
+            ds(0.65, 0.00, 0.25, 0.15, 0.55, 0.00, 0.45, 0.45, 0.10, 0.15), // Ride
+            ds(0.58, 0.10, 0.30, 0.80, 0.78, 0.00, 0.10, 0.60, 0.10, 0.15), // Clap
+            ds(0.52, 0.10, 0.25, 0.30, 0.50, 0.00, 0.18, 0.50, 0.10, 0.10), // Cowbell
+            ds(0.60, 0.20, 0.05, 0.50, 0.60, 0.00, 0.22, 0.60, 0.10, 0.10), // Tom
+        ]),
+        // Kit 6: Lo-Fi — gritty, crushed, vintage
+        make_kit("Lo-Fi", [
+            ds(0.28, 0.55, 0.45, 0.30, 0.40, 0.45, 0.55, 0.78, 0.15, 0.10), // Kick
+            ds(0.38, 0.12, 0.65, 0.35, 0.40, 0.45, 0.42, 0.72, 0.20, 0.10), // Snare
+            ds(0.48, 0.00, 0.60, 0.25, 0.38, 0.35, 0.10, 0.62, 0.10, 0.05), // CHH
+            ds(0.42, 0.00, 0.55, 0.20, 0.35, 0.35, 0.50, 0.60, 0.15, 0.10), // OHH
+            ds(0.42, 0.00, 0.55, 0.12, 0.35, 0.25, 0.75, 0.52, 0.15, 0.10), // Ride
+            ds(0.45, 0.25, 0.60, 0.40, 0.42, 0.40, 0.40, 0.68, 0.20, 0.10), // Clap
+            ds(0.48, 0.30, 0.55, 0.20, 0.40, 0.35, 0.38, 0.58, 0.15, 0.10), // Cowbell
+            ds(0.38, 0.50, 0.35, 0.25, 0.45, 0.40, 0.52, 0.70, 0.15, 0.10), // Tom
+        ]),
+        // Kit 7: Electro — bright, aggressive, funk-influenced
+        make_kit("Electro", [
+            ds(0.30, 0.80, 0.25, 0.70, 0.85, 0.25, 0.50, 0.88, 0.05, 0.10), // Kick
+            ds(0.48, 0.15, 0.55, 0.75, 0.80, 0.25, 0.30, 0.82, 0.10, 0.10), // Snare
+            ds(0.65, 0.05, 0.45, 0.55, 0.80, 0.15, 0.07, 0.72, 0.05, 0.10), // CHH
+            ds(0.60, 0.05, 0.50, 0.45, 0.75, 0.15, 0.45, 0.68, 0.10, 0.15), // OHH
+            ds(0.65, 0.05, 0.45, 0.35, 0.70, 0.15, 0.55, 0.58, 0.10, 0.10), // Ride
+            ds(0.55, 0.20, 0.50, 0.70, 0.75, 0.20, 0.28, 0.78, 0.10, 0.10), // Clap
+            ds(0.60, 0.30, 0.40, 0.35, 0.70, 0.15, 0.30, 0.68, 0.10, 0.10), // Cowbell
+            ds(0.50, 0.80, 0.15, 0.60, 0.80, 0.20, 0.40, 0.78, 0.10, 0.10), // Tom
+        ]),
+        // Kit 8: Ambient — soft, washy, atmospheric
+        make_kit("Ambient", [
+            ds(0.25, 0.40, 0.20, 0.10, 0.40, 0.05, 0.70, 0.65, 0.30, 0.20), // Kick
+            ds(0.35, 0.05, 0.60, 0.12, 0.35, 0.00, 0.55, 0.55, 0.40, 0.25), // Snare
+            ds(0.55, 0.00, 0.55, 0.10, 0.40, 0.00, 0.15, 0.45, 0.30, 0.20), // CHH
+            ds(0.48, 0.00, 0.50, 0.08, 0.38, 0.00, 0.75, 0.45, 0.40, 0.30), // OHH
+            ds(0.50, 0.00, 0.45, 0.08, 0.35, 0.00, 0.90, 0.42, 0.40, 0.30), // Ride
+            ds(0.45, 0.15, 0.55, 0.15, 0.38, 0.00, 0.55, 0.50, 0.35, 0.25), // Clap
+            ds(0.48, 0.20, 0.40, 0.10, 0.40, 0.00, 0.50, 0.45, 0.30, 0.20), // Cowbell
+            ds(0.40, 0.45, 0.15, 0.12, 0.45, 0.00, 0.65, 0.58, 0.35, 0.25), // Tom
+        ]),
+    ]
+}
+
+// ── Kit ─────────────────────────────────────────────────────────────────────
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct DrumKit {
+    #[serde(default = "default_kit_name")]
+    pub name: String,
+    pub tracks: Vec<KitTrack>,
+}
+
+fn default_kit_name() -> String { "Default Kit".to_string() }
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct KitTrack {
+    pub id: String,
+    #[serde(flatten)]
+    pub params: DrumSoundParams,
+}
+
+impl Default for DrumKit {
+    fn default() -> Self {
+        let tracks = TRACK_IDS.iter().map(|&id| KitTrack {
+            id: id.name().to_lowercase(),
+            params: DrumSoundParams::defaults_for(id),
+        }).collect();
+        Self {
+            name: "Default Kit".to_string(),
+            tracks,
+        }
+    }
+}
+
+// ── Pattern (steps only) ────────────────────────────────────────────────────
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct PatternData {
+    #[serde(default = "default_pattern_name")]
+    pub name: String,
+    /// Per-pattern BPM override. 0.0 means "use project BPM".
+    #[serde(default)]
+    pub bpm: f64,
+    /// Hex-encoded steps per track (8 hex chars = 32 steps)
+    pub steps: Vec<String>,
+}
+
+fn default_pattern_name() -> String { "Empty".to_string() }
+
+impl Default for PatternData {
+    fn default() -> Self {
+        Self {
+            name: "Empty".to_string(),
+            bpm: 0.0,
+            steps: vec!["00000000".to_string(); NUM_DRUM_TRACKS],
+        }
+    }
+}
+
+// ── Synth Kit ────────────────────────────────────────────────────────────────
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct SynthKitData {
+    #[serde(default = "default_kit_name")]
+    pub name: String,
+    #[serde(default)]
+    pub params: SynthParams,
+}
+
+impl Default for SynthKitData {
+    fn default() -> Self {
+        Self {
+            name: "Default Kit".to_string(),
+            params: SynthParams::default(),
+        }
+    }
+}
+
+impl SynthKitData {
+    pub fn from_synth_params(params: &SynthParams) -> Self {
+        Self {
+            name: "Default Kit".to_string(),
+            params: *params,
+        }
+    }
+
+    pub fn apply_to(&self, pattern: &mut SynthPattern) {
+        let mute = pattern.params.mute;
+        pattern.params = self.params;
+        pattern.params.mute = mute;
+    }
+}
+
+// ── Synth Pattern ────────────────────────────────────────────────────────────
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct SynthPatternData {
+    #[serde(default = "default_pattern_name")]
+    pub name: String,
+    pub steps: Vec<SynthStepData>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct SynthStepData {
+    #[serde(default)]
+    pub active: bool,
+    #[serde(default)]
+    pub note: u8,
+    #[serde(default)]
+    pub velocity: f32,
+    #[serde(default)]
+    pub gate: f32,
+    #[serde(default = "default_step_length")]
+    pub length: u8,
+}
+
+fn default_step_length() -> u8 { 1 }
+
+impl Default for SynthStepData {
+    fn default() -> Self {
+        Self {
+            active: false,
+            note: 0,
+            velocity: 0.0,
+            gate: 0.0,
+            length: 1,
+        }
+    }
+}
+
+impl Default for SynthPatternData {
+    fn default() -> Self {
+        Self {
+            name: "Empty".to_string(),
+            steps: (0..SYNTH_MAX_STEPS).map(|_| SynthStepData::default()).collect(),
+        }
+    }
+}
+
+impl SynthPatternData {
+    pub fn from_synth_pattern(pattern: &SynthPattern) -> Self {
+        let steps = pattern.steps.iter().map(|s| SynthStepData {
+            active: s.is_active(),
+            note: s.note,
+            velocity: s.velocity as f32 / 127.0,
+            gate: 1.0,
+            length: s.length,
+        }).collect();
+        Self {
+            name: "Empty".to_string(),
+            steps,
+        }
+    }
+
+    pub fn apply_to(&self, pattern: &mut SynthPattern) {
+        for (i, step_data) in self.steps.iter().enumerate() {
+            if i >= SYNTH_MAX_STEPS { break; }
+            pattern.steps[i] = SynthStep {
+                note: step_data.note,
+                velocity: if step_data.active {
+                    (step_data.velocity * 127.0).round().clamp(1.0, 127.0) as u8
+                } else {
+                    0
+                },
+                length: step_data.length,
+            };
+        }
+    }
+}
+
+// ── Project ─────────────────────────────────────────────────────────────────
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct ProjectFile {
+    pub textstep: FileHeader,
+    #[serde(default)]
+    pub metadata: ProjectMetadata,
+    /// Legacy single kit field — read from old files, not written to new saves.
+    #[serde(default, skip_serializing)]
+    pub kit: DrumKit,
+    /// Kit bank (8 kits). New files use this.
+    #[serde(default)]
+    pub kits: Vec<DrumKit>,
+    #[serde(default)]
+    pub active_kit: usize,
+    pub patterns: Vec<PatternData>,
+    #[serde(default)]
+    pub active_pattern: usize,
+    #[serde(default = "default_bpm")]
+    pub bpm: f64,
+    #[serde(default = "default_loop_length")]
+    pub loop_length: u8,
+    #[serde(default = "default_swing")]
+    pub swing: f32,
+    #[serde(default)]
+    pub effects: EffectParams,
+    #[serde(default)]
+    pub synth_kits: Vec<SynthKitData>,
+    #[serde(default)]
+    pub active_synth_kit: usize,
+    #[serde(default)]
+    pub synth_patterns: Vec<SynthPatternData>,
+    #[serde(default)]
+    pub active_synth_pattern: usize,
+}
+
+fn default_bpm() -> f64 { 120.0 }
+fn default_loop_length() -> u8 { 32 }
+fn default_swing() -> f32 { 0.50 }
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct FileHeader {
+    pub format_version: u32,
+    #[serde(default)]
+    pub app_version: String,
+}
+
+impl Default for FileHeader {
+    fn default() -> Self {
+        Self {
+            format_version: 1,
+            app_version: env!("CARGO_PKG_VERSION").to_string(),
+        }
+    }
+}
+
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+pub struct ProjectMetadata {
+    #[serde(default)]
+    pub name: String,
+    #[serde(default)]
+    pub author: String,
+}
+
+impl Default for ProjectFile {
+    fn default() -> Self {
+        let mut patterns = Vec::with_capacity(NUM_PATTERNS);
+        for i in 0..NUM_PATTERNS {
+            patterns.push(PatternData {
+                name: format!("Pattern {}", i + 1),
+                ..Default::default()
+            });
+        }
+        let kits = genre_kits();
+        let mut synth_patterns = Vec::with_capacity(NUM_PATTERNS);
+        for i in 0..NUM_PATTERNS {
+            synth_patterns.push(SynthPatternData {
+                name: format!("Synth {}", i + 1),
+                ..Default::default()
+            });
+        }
+        let mut synth_kits = Vec::with_capacity(NUM_KITS);
+        for i in 0..NUM_KITS {
+            synth_kits.push(SynthKitData {
+                name: format!("Synth Kit {}", i + 1),
+                ..Default::default()
+            });
+        }
+        Self {
+            textstep: FileHeader::default(),
+            metadata: ProjectMetadata {
+                name: "Untitled".to_string(),
+                ..Default::default()
+            },
+            kit: DrumKit::default(),
+            kits,
+            active_kit: 0,
+            patterns,
+            active_pattern: 0,
+            bpm: 120.0,
+            loop_length: 32,
+            swing: 0.50,
+            effects: EffectParams::default(),
+            synth_kits,
+            active_synth_kit: 0,
+            synth_patterns,
+            active_synth_pattern: 0,
+        }
+    }
+}
+
+/// Create a demo project with 10 pre-filled genre patterns from classic drum programming.
+pub fn demo_project() -> ProjectFile {
+    let patterns = vec![
+        // 1. House (125 BPM)
+        // Kick: four-on-the-floor | Snare: beat 3 | CHH: 16ths except offbeats
+        // OHH: offbeat 16ths + running 16ths on beat 4 | Tom: beat 2 accent
+        PatternData {
+            name: "House".into(),
+            bpm: 125.0,
+            steps: vec![
+                "88880000".into(), // Kick:  0,4,8,12
+                "00800000".into(), // Snare: 8
+                "eee00000".into(), // CHH:   0,1,2,4,5,6,8,9,10
+                "111f0000".into(), // OHH:   3,7,11,12,13,14,15
+                "00000000".into(), // Ride
+                "00000000".into(), // Clap
+                "00000000".into(), // Cowbell
+                "08000000".into(), // Tom:   4
+            ],
+        },
+        // 2. Chicago House (122 BPM)
+        // Kick with upbeat anticipation | Snare on 2&4 | Paired CHH/OHH | Clap on 2&4
+        PatternData {
+            name: "Chicago House".into(),
+            bpm: 122.0,
+            steps: vec![
+                "88820000".into(), // Kick:  0,4,8,14
+                "08080000".into(), // Snare: 4,12
+                "cccc0000".into(), // CHH:   0,1,4,5,8,9,12,13
+                "33100000".into(), // OHH:   2,3,6,7,11
+                "00000000".into(), // Ride
+                "08080000".into(), // Clap:  4,12
+                "00000000".into(), // Cowbell
+                "00000000".into(), // Tom
+            ],
+        },
+        // 3. Brit House (122 BPM)
+        // Syncopated kick | CHH/OHH like House | Clap on beat 3 | Ride accents
+        PatternData {
+            name: "Brit House".into(),
+            bpm: 122.0,
+            steps: vec![
+                "89800000".into(), // Kick:  0,4,7,8
+                "00000000".into(), // Snare
+                "eee00000".into(), // CHH:   0,1,2,4,5,6,8,9,10
+                "111f0000".into(), // OHH:   3,7,11,12,13,14,15
+                "08090000".into(), // Ride:  4,12,15
+                "00800000".into(), // Clap:  8
+                "00000000".into(), // Cowbell
+                "00000000".into(), // Tom
+            ],
+        },
+        // 4. French House (124 BPM)
+        // Funky syncopated kick | Shaker (cowbell) on 8ths | Clap on beat 3
+        PatternData {
+            name: "French House".into(),
+            bpm: 124.0,
+            steps: vec![
+                "98980000".into(), // Kick:    0,3,4,8,11,12
+                "00000000".into(), // Snare
+                "cce00000".into(), // CHH:     0,1,4,5,8,9,10
+                "331f0000".into(), // OHH:     2,3,6,7,11,12,13,14,15
+                "00000000".into(), // Ride
+                "00800000".into(), // Clap:    8
+                "aaa00000".into(), // Cowbell:  0,2,4,6,8,10 (shakers)
+                "00000000".into(), // Tom
+            ],
+        },
+        // 5. Dirty House (126 BPM)
+        // Syncopated kick | Sparse hats | Offbeat claps
+        PatternData {
+            name: "Dirty House".into(),
+            bpm: 126.0,
+            steps: vec![
+                "98880000".into(), // Kick:  0,3,4,8,12
+                "00800000".into(), // Snare: 8
+                "08080000".into(), // CHH:   4,12
+                "02020000".into(), // OHH:   6,14
+                "00000000".into(), // Ride
+                "22200000".into(), // Clap:  2,6,10
+                "00000000".into(), // Cowbell
+                "00000000".into(), // Tom
+            ],
+        },
+        // 6. Trance (138 BPM)
+        // Four-on-the-floor | Dense CHH/OHH pattern | Crash on beat 1
+        PatternData {
+            name: "Trance".into(),
+            bpm: 138.0,
+            steps: vec![
+                "88880000".into(), // Kick:  0,4,8,12
+                "00000000".into(), // Snare
+                "eee00000".into(), // CHH:   0,1,2,4,5,6,8,9,10
+                "111f0000".into(), // OHH:   3,7,11,12,13,14,15
+                "80000000".into(), // Ride:  0 (crash)
+                "00000000".into(), // Clap
+                "00000000".into(), // Cowbell
+                "00000000".into(), // Tom
+            ],
+        },
+        // 7. Techno (130 BPM)
+        // Four-on-the-floor | 8th-note CHH | Offbeat ride | Clap on 2&4
+        PatternData {
+            name: "Techno".into(),
+            bpm: 130.0,
+            steps: vec![
+                "88880000".into(), // Kick:  0,4,8,12
+                "00000000".into(), // Snare
+                "aaaa0000".into(), // CHH:   0,2,4,6,8,10,12,14 (8th notes)
+                "00000000".into(), // OHH
+                "22220000".into(), // Ride:  2,6,10,14 (offbeat 8ths)
+                "08080000".into(), // Clap:  4,12
+                "00000000".into(), // Cowbell
+                "00000000".into(), // Tom
+            ],
+        },
+        // 8. Drum & Bass (170 BPM)
+        // Breakbeat kick pattern | Snare on beat 3 | Dense hats
+        PatternData {
+            name: "Drum & Bass".into(),
+            bpm: 170.0,
+            steps: vec![
+                "80200000".into(), // Kick:  0,10
+                "00800000".into(), // Snare: 8
+                "eee00000".into(), // CHH:   0,1,2,4,5,6,8,9,10
+                "111f0000".into(), // OHH:   3,7,11,12,13,14,15
+                "00000000".into(), // Ride
+                "00000000".into(), // Clap
+                "00000000".into(), // Cowbell
+                "00000000".into(), // Tom
+            ],
+        },
+        // 9. Trap (140 BPM)
+        // Sparse kick with anticipation | Hi-hat rolls | Tom fills
+        PatternData {
+            name: "Trap".into(),
+            bpm: 140.0,
+            steps: vec![
+                "88020000".into(), // Kick:  0,4,14
+                "00800000".into(), // Snare: 8
+                "ffaa0000".into(), // CHH:   0,1,2,3,4,5,6,7,8,10,12,14 (rolls)
+                "00000000".into(), // OHH
+                "00000000".into(), // Ride
+                "00000000".into(), // Clap
+                "00000000".into(), // Cowbell
+                "00210000".into(), // Tom:   10,15
+            ],
+        },
+        // 10. Moombahton (100 BPM)
+        // Dembow-influenced | Snare on 2,3,4 | OHH fills gaps
+        PatternData {
+            name: "Moombahton".into(),
+            bpm: 100.0,
+            steps: vec![
+                "88800000".into(), // Kick:    0,4,8
+                "08880000".into(), // Snare:   4,8,12
+                "eccc0000".into(), // CHH:     0,1,2,4,5,8,9,12,13
+                "13330000".into(), // OHH:     3,6,7,10,11,14,15
+                "80000000".into(), // Ride:    0
+                "00000000".into(), // Clap
+                "00000000".into(), // Cowbell
+                "00000000".into(), // Tom
+            ],
+        },
+    ];
+
+    let kits = genre_kits();
+
+    let mut synth_patterns = Vec::with_capacity(NUM_PATTERNS);
+    for i in 0..NUM_PATTERNS {
+        synth_patterns.push(SynthPatternData {
+            name: format!("Synth {}", i + 1),
+            ..Default::default()
+        });
+    }
+    let mut synth_kits = Vec::with_capacity(NUM_KITS);
+    for i in 0..NUM_KITS {
+        synth_kits.push(SynthKitData {
+            name: format!("Synth Kit {}", i + 1),
+            ..Default::default()
+        });
+    }
+
+    ProjectFile {
+        textstep: FileHeader::default(),
+        metadata: ProjectMetadata {
+            name: "Demo Beats".to_string(),
+            ..Default::default()
+        },
+        kit: DrumKit::default(),
+        kits,
+        active_kit: 0,
+        patterns,
+        active_pattern: 0,
+        bpm: 125.0,
+        loop_length: 16,
+        swing: 0.50,
+        effects: EffectParams::default(),
+        synth_kits,
+        active_synth_kit: 0,
+        synth_patterns,
+        active_synth_pattern: 0,
+    }
+}
+
+// ── Hex step encoding ───────────────────────────────────────────────────────
+
+pub fn steps_to_hex(steps: &[bool; MAX_STEPS]) -> String {
+    let mut s = String::with_capacity(8);
+    for chunk in steps.chunks(4) {
+        let nibble = (chunk[0] as u8) << 3
+                   | (chunk[1] as u8) << 2
+                   | (chunk[2] as u8) << 1
+                   | (chunk[3] as u8);
+        s.push(char::from_digit(nibble as u32, 16).unwrap());
+    }
+    s
+}
+
+pub fn hex_to_steps(hex: &str) -> [bool; MAX_STEPS] {
+    let mut steps = [false; MAX_STEPS];
+    for (i, ch) in hex.chars().enumerate() {
+        if i >= 8 { break; }
+        let nibble = ch.to_digit(16).unwrap_or(0) as u8;
+        steps[i * 4]     = nibble & 0b1000 != 0;
+        steps[i * 4 + 1] = nibble & 0b0100 != 0;
+        steps[i * 4 + 2] = nibble & 0b0010 != 0;
+        steps[i * 4 + 3] = nibble & 0b0001 != 0;
+    }
+    steps
+}
+
+// ── Project <-> App state conversion ────────────────────────────────────────
+
+use crate::sequencer::drum_pattern::DrumPattern;
+
+impl ProjectFile {
+    /// Load kit sound params into a DrumPattern's params array.
+    pub fn apply_kit_to_pattern(&self, kit_index: usize, pattern: &mut DrumPattern) {
+        let kit = self.kits.get(kit_index).unwrap_or(&self.kits[0]);
+        for (i, kit_track) in kit.tracks.iter().enumerate() {
+            if i < NUM_DRUM_TRACKS {
+                let p = kit_track.params.to_track_params();
+                // Preserve mute/solo state
+                let mute = pattern.params[i].mute;
+                let solo = pattern.params[i].solo;
+                pattern.params[i] = p;
+                pattern.params[i].mute = mute;
+                pattern.params[i].solo = solo;
+            }
+        }
+    }
+
+    /// Load step data from a specific pattern index into a DrumPattern.
+    pub fn load_pattern_steps(&self, index: usize, pattern: &mut DrumPattern) {
+        if let Some(pat_data) = self.patterns.get(index) {
+            for (track, hex) in pat_data.steps.iter().enumerate() {
+                if track < NUM_DRUM_TRACKS {
+                    pattern.steps[track] = hex_to_steps(hex);
+                }
+            }
+        }
+    }
+
+    /// Save the current DrumPattern steps into a pattern slot.
+    pub fn save_pattern_steps(&mut self, index: usize, pattern: &DrumPattern) {
+        if index < self.patterns.len() {
+            self.patterns[index].steps = pattern.steps.iter()
+                .map(|track_steps| steps_to_hex(track_steps))
+                .collect();
+        }
+    }
+
+    /// Save current kit params from a DrumPattern into a specific kit slot.
+    pub fn save_kit_from_pattern(&mut self, kit_index: usize, pattern: &DrumPattern) {
+        if kit_index >= self.kits.len() { return; }
+        let kit = &mut self.kits[kit_index];
+        for (i, track_id) in TRACK_IDS.iter().enumerate() {
+            if i < kit.tracks.len() {
+                kit.tracks[i].params = DrumSoundParams::from_track_params(&pattern.params[i]);
+            } else {
+                kit.tracks.push(KitTrack {
+                    id: track_id.name().to_lowercase(),
+                    params: DrumSoundParams::from_track_params(&pattern.params[i]),
+                });
+            }
+        }
+    }
+
+    /// Save synth pattern steps to project.
+    pub fn save_synth_pattern(&mut self, index: usize, pattern: &SynthPattern) {
+        if index < self.synth_patterns.len() {
+            self.synth_patterns[index] = SynthPatternData::from_synth_pattern(pattern);
+        }
+    }
+
+    /// Load synth pattern steps from project.
+    pub fn load_synth_pattern(&self, index: usize, pattern: &mut SynthPattern) {
+        if let Some(pat_data) = self.synth_patterns.get(index) {
+            pat_data.apply_to(pattern);
+        }
+    }
+
+    /// Save synth kit params to project.
+    pub fn save_synth_kit(&mut self, index: usize, params: &SynthParams) {
+        if index < self.synth_kits.len() {
+            self.synth_kits[index].params = *params;
+        }
+    }
+
+    /// Load synth kit params into pattern.
+    pub fn load_synth_kit(&self, index: usize, pattern: &mut SynthPattern) {
+        if let Some(kit_data) = self.synth_kits.get(index) {
+            kit_data.apply_to(pattern);
+        }
+    }
+
+    /// Ensure we always have NUM_PATTERNS patterns and NUM_KITS kits.
+    pub fn normalize(&mut self) {
+        // Migrate old single-kit format: if kits is empty, seed from legacy kit field
+        if self.kits.is_empty() && !self.kit.tracks.is_empty() {
+            self.kits.push(self.kit.clone());
+        }
+        while self.kits.len() < NUM_KITS {
+            let idx = self.kits.len();
+            self.kits.push(DrumKit {
+                name: format!("Kit {}", idx + 1),
+                ..DrumKit::default()
+            });
+        }
+        if self.active_kit >= self.kits.len() {
+            self.active_kit = 0;
+        }
+
+        while self.patterns.len() < NUM_PATTERNS {
+            let idx = self.patterns.len();
+            self.patterns.push(PatternData {
+                name: format!("Pattern {}", idx + 1),
+                ..Default::default()
+            });
+        }
+        if self.active_pattern >= self.patterns.len() {
+            self.active_pattern = 0;
+        }
+
+        while self.synth_kits.len() < NUM_KITS {
+            let idx = self.synth_kits.len();
+            self.synth_kits.push(SynthKitData {
+                name: format!("Synth Kit {}", idx + 1),
+                ..Default::default()
+            });
+        }
+        if self.active_synth_kit >= self.synth_kits.len() {
+            self.active_synth_kit = 0;
+        }
+
+        while self.synth_patterns.len() < NUM_PATTERNS {
+            let idx = self.synth_patterns.len();
+            self.synth_patterns.push(SynthPatternData {
+                name: format!("Synth {}", idx + 1),
+                ..Default::default()
+            });
+        }
+        if self.active_synth_pattern >= self.synth_patterns.len() {
+            self.active_synth_pattern = 0;
+        }
+    }
+}
+
+// ── File I/O ────────────────────────────────────────────────────────────────
+
+pub fn data_dir() -> PathBuf {
+    #[cfg(target_os = "macos")]
+    {
+        let home = std::env::var("HOME").unwrap_or_else(|_| ".".to_string());
+        PathBuf::from(home).join("Library/Application Support/textstep")
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        if let Ok(xdg) = std::env::var("XDG_DATA_HOME") {
+            PathBuf::from(xdg).join("textstep")
+        } else {
+            let home = std::env::var("HOME").unwrap_or_else(|_| ".".to_string());
+            PathBuf::from(home).join(".local/share/textstep")
+        }
+    }
+}
+
+pub fn projects_dir() -> PathBuf {
+    data_dir().join("projects")
+}
+
+pub fn kits_dir() -> PathBuf {
+    data_dir().join("kits")
+}
+
+pub fn save_project(project: &ProjectFile, path: &std::path::Path) -> Result<(), String> {
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent).map_err(|e| format!("Create dir: {}", e))?;
+    }
+    let json = serde_json::to_string_pretty(project).map_err(|e| format!("Serialize: {}", e))?;
+    std::fs::write(path, json).map_err(|e| format!("Write: {}", e))?;
+    Ok(())
+}
+
+pub fn load_project(path: &std::path::Path) -> Result<ProjectFile, String> {
+    let json = std::fs::read_to_string(path).map_err(|e| format!("Read: {}", e))?;
+    let mut project: ProjectFile = serde_json::from_str(&json).map_err(|e| format!("Parse: {}", e))?;
+    project.normalize();
+    Ok(project)
+}
+
+/// List all .tsp files in the projects directory.
+pub fn list_projects() -> Vec<(String, PathBuf)> {
+    let dir = projects_dir();
+    let mut results = Vec::new();
+    if let Ok(entries) = std::fs::read_dir(&dir) {
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.extension().and_then(|s| s.to_str()) == Some("tsp") {
+                // Try to read just the name from metadata
+                let name = if let Ok(proj) = load_project(&path) {
+                    if proj.metadata.name.is_empty() {
+                        path.file_stem()
+                            .and_then(|s| s.to_str())
+                            .unwrap_or("?")
+                            .to_string()
+                    } else {
+                        proj.metadata.name
+                    }
+                } else {
+                    path.file_stem()
+                        .and_then(|s| s.to_str())
+                        .unwrap_or("?")
+                        .to_string()
+                };
+                results.push((name, path));
+            }
+        }
+    }
+    results.sort_by(|a, b| a.0.cmp(&b.0));
+    results
+}
+
+// ── Kit I/O ─────────────────────────────────────────────────────────────────
+
+pub fn save_kit(kit: &DrumKit, path: &std::path::Path) -> Result<(), String> {
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent).map_err(|e| format!("Create dir: {}", e))?;
+    }
+    let json = serde_json::to_string_pretty(kit).map_err(|e| format!("Serialize: {}", e))?;
+    std::fs::write(path, json).map_err(|e| format!("Write: {}", e))?;
+    Ok(())
+}
+
+pub fn load_kit(path: &std::path::Path) -> Result<DrumKit, String> {
+    let json = std::fs::read_to_string(path).map_err(|e| format!("Read: {}", e))?;
+    let kit: DrumKit = serde_json::from_str(&json).map_err(|e| format!("Parse: {}", e))?;
+    Ok(kit)
+}
+
+pub fn list_kits() -> Vec<(String, PathBuf)> {
+    let dir = kits_dir();
+    let mut results = Vec::new();
+    if let Ok(entries) = std::fs::read_dir(&dir) {
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.extension().and_then(|s| s.to_str()) == Some("tsk") {
+                let name = if let Ok(kit) = load_kit(&path) {
+                    kit.name
+                } else {
+                    path.file_stem()
+                        .and_then(|s| s.to_str())
+                        .unwrap_or("?")
+                        .to_string()
+                };
+                results.push((name, path));
+            }
+        }
+    }
+    results.sort_by(|a, b| a.0.cmp(&b.0));
+    results
+}
+
+// ── Tests ───────────────────────────────────────────────────────────────────
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn hex_roundtrip() {
+        let mut steps = [false; MAX_STEPS];
+        steps[0] = true;
+        steps[4] = true;
+        steps[8] = true;
+        steps[12] = true;
+        let hex = steps_to_hex(&steps);
+        assert_eq!(hex, "88880000");
+        let decoded = hex_to_steps(&hex);
+        assert_eq!(steps, decoded);
+    }
+
+    #[test]
+    fn hex_all_on() {
+        let steps = [true; MAX_STEPS];
+        let hex = steps_to_hex(&steps);
+        assert_eq!(hex, "ffffffff");
+    }
+
+    #[test]
+    fn hex_empty() {
+        let steps = [false; MAX_STEPS];
+        let hex = steps_to_hex(&steps);
+        assert_eq!(hex, "00000000");
+        let decoded = hex_to_steps(&hex);
+        assert_eq!(steps, decoded);
+    }
+
+    #[test]
+    fn project_default_has_10_patterns() {
+        let proj = ProjectFile::default();
+        assert_eq!(proj.patterns.len(), NUM_PATTERNS);
+    }
+
+    #[test]
+    fn project_serialize_roundtrip() {
+        let proj = ProjectFile::default();
+        let json = serde_json::to_string(&proj).unwrap();
+        let loaded: ProjectFile = serde_json::from_str(&json).unwrap();
+        assert_eq!(loaded.patterns.len(), proj.patterns.len());
+        assert_eq!(loaded.bpm, proj.bpm);
+        assert_eq!(loaded.kits.len(), NUM_KITS);
+        assert_eq!(loaded.kits[0].tracks.len(), NUM_DRUM_TRACKS);
+        assert_eq!(loaded.active_kit, 0);
+    }
+
+    #[test]
+    fn forward_compat_missing_fields() {
+        // Simulate an old file with only legacy "kit" field (no "kits" array)
+        let json = r#"{
+            "textstep": {"format_version": 1},
+            "kit": {
+                "name": "Old Kit",
+                "tracks": [{"id": "kick", "tune": 0.3, "decay": 0.5, "volume": 0.8}]
+            },
+            "patterns": [{"name": "P1", "steps": ["80000000"]}],
+            "bpm": 130.0
+        }"#;
+        let mut proj: ProjectFile = serde_json::from_str(json).unwrap();
+        proj.normalize();
+        assert_eq!(proj.patterns.len(), NUM_PATTERNS);
+        // Legacy kit migrated into kits[0]
+        assert_eq!(proj.kits.len(), NUM_KITS);
+        assert_eq!(proj.kits[0].name, "Old Kit");
+        assert_eq!(proj.kits[0].tracks[0].params.tune, 0.3);
+        // Missing fields get defaults
+        assert_eq!(proj.kits[0].tracks[0].params.sweep, default_third());
+        assert_eq!(proj.kits[0].tracks[0].params.filter, default_half());
+        // Remaining kits are defaults
+        assert_eq!(proj.kits[1].name, "Kit 2");
+    }
+}
+
+#[cfg(test)]
+mod demo_tests {
+    use super::*;
+
+    #[test]
+    fn demo_house_kick_is_four_on_the_floor() {
+        let proj = demo_project();
+        let steps = hex_to_steps(&proj.patterns[0].steps[0]); // Kick
+        assert!(steps[0]);  // beat 1
+        assert!(steps[4]);  // beat 2
+        assert!(steps[8]);  // beat 3
+        assert!(steps[12]); // beat 4
+    }
+
+    #[test]
+    fn demo_project_has_10_patterns() {
+        let proj = demo_project();
+        assert_eq!(proj.patterns.len(), 10);
+    }
+
+    #[test]
+    fn demo_patterns_have_bpm() {
+        let proj = demo_project();
+        assert!((proj.patterns[0].bpm - 125.0).abs() < 0.01); // House
+        assert!((proj.patterns[7].bpm - 170.0).abs() < 0.01); // D&B
+    }
+
+    #[test]
+    fn demo_serialize_roundtrip() {
+        let proj = demo_project();
+        let json = serde_json::to_string(&proj).unwrap();
+        let loaded: ProjectFile = serde_json::from_str(&json).unwrap();
+        assert_eq!(loaded.patterns.len(), 10);
+        assert_eq!(loaded.patterns[0].name, "House");
+        assert!((loaded.patterns[0].bpm - 125.0).abs() < 0.01);
+    }
+
+    /// Render all genre kit voices to WAV files for auditioning.
+    /// Run with: cargo test render_kits -- --ignored --nocapture
+    /// Output: kit_renders/<kit_name>/<voice>.wav
+    #[test]
+    #[ignore]
+    fn render_kits_to_wav() {
+        use crate::audio::drum_voice::create_drum_voices;
+        use crate::sequencer::drum_pattern::TRACK_IDS;
+        use std::fs;
+        use std::io::Write;
+        use std::path::PathBuf;
+
+        const SAMPLE_RATE: f64 = 44100.0;
+        const RENDER_SAMPLES: usize = (44100.0 * 1.5) as usize; // 1.5s per hit
+
+        fn write_wav(path: &PathBuf, samples: &[f32], sample_rate: u32) {
+            let num_samples = samples.len() as u32;
+            let data_size = num_samples * 2; // 16-bit mono
+            let file_size = 36 + data_size;
+            let mut f = fs::File::create(path).expect("Failed to create WAV");
+            // RIFF header
+            f.write_all(b"RIFF").unwrap();
+            f.write_all(&file_size.to_le_bytes()).unwrap();
+            f.write_all(b"WAVE").unwrap();
+            // fmt chunk
+            f.write_all(b"fmt ").unwrap();
+            f.write_all(&16u32.to_le_bytes()).unwrap();
+            f.write_all(&1u16.to_le_bytes()).unwrap(); // PCM
+            f.write_all(&1u16.to_le_bytes()).unwrap(); // mono
+            f.write_all(&sample_rate.to_le_bytes()).unwrap();
+            f.write_all(&(sample_rate * 2).to_le_bytes()).unwrap(); // byte rate
+            f.write_all(&2u16.to_le_bytes()).unwrap(); // block align
+            f.write_all(&16u16.to_le_bytes()).unwrap(); // bits per sample
+            // data chunk
+            f.write_all(b"data").unwrap();
+            f.write_all(&data_size.to_le_bytes()).unwrap();
+            for &s in samples {
+                let v = (s.clamp(-1.0, 1.0) * 32767.0) as i16;
+                f.write_all(&v.to_le_bytes()).unwrap();
+            }
+        }
+
+        let kits = genre_kits();
+        let voice_names: Vec<&str> = TRACK_IDS.iter().map(|id| id.name()).collect();
+        let output_dir = PathBuf::from("kit_renders");
+        fs::create_dir_all(&output_dir).unwrap();
+
+        println!("\nRendering {} kits x {} voices...\n", kits.len(), voice_names.len());
+
+        for kit in &kits {
+            let kit_dir = output_dir.join(&kit.name);
+            fs::create_dir_all(&kit_dir).unwrap();
+            let mut voices = create_drum_voices(SAMPLE_RATE);
+
+            for (i, track) in kit.tracks.iter().enumerate() {
+                let params = track.params.to_track_params();
+                voices[i].trigger(&params);
+
+                let mut samples = Vec::with_capacity(RENDER_SAMPLES);
+                let mut peak: f32 = 0.0;
+                for _ in 0..RENDER_SAMPLES {
+                    let s = voices[i].tick() * params.volume;
+                    peak = peak.max(s.abs());
+                    samples.push(s);
+                }
+
+                // Normalize to -1dB headroom
+                if peak > 0.001 {
+                    let gain = 0.89 / peak;
+                    for s in &mut samples { *s *= gain; }
+                }
+
+                let filename = format!("{}_{}.wav", i + 1, voice_names[i].to_lowercase());
+                let path = kit_dir.join(&filename);
+                write_wav(&path, &samples, SAMPLE_RATE as u32);
+                println!("  {:>8} / {:<12} peak={:.3}  -> {}/{}",
+                    kit.name, voice_names[i], peak, kit.name, filename);
+            }
+            println!();
+        }
+        println!("Done! Files in: {}/", output_dir.display());
+    }
+}

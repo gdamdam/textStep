@@ -1,0 +1,42 @@
+// Shared parameter types
+
+use serde::{Deserialize, Serialize};
+
+#[derive(Clone, Copy, Debug, Serialize, Deserialize)]
+pub struct EffectParams {
+    pub reverb_amount: f32,      // 0.0-1.0: feedback/decay
+    pub reverb_damping: f32,     // 0.0-1.0: tail brightness (0=bright, 1=dark)
+    pub delay_time: f32,         // 0.0-1.0: subdivision selector
+    pub delay_feedback: f32,     // 0.0-1.0: echo repeats
+    pub delay_tone: f32,         // 0.0-1.0: LP cutoff in feedback loop
+    #[serde(default)]
+    pub compressor_amount: f32,  // 0.0-1.0: master glue compressor (0=off)
+    #[serde(default = "default_master_volume")]
+    pub master_volume: f32,      // 0.0-1.0: master output volume
+    #[serde(default)]
+    pub drum_saturator_drive: f32,    // 0.0-1.0: drum tube saturator drive (0=off)
+    #[serde(default)]
+    pub synth_saturator_drive: f32,   // 0.0-1.0: synth tube saturator drive (0=off)
+    #[serde(default = "default_drum_volume")]
+    pub drum_volume: f32,        // 0.0-1.0: drum bus output volume
+}
+
+fn default_master_volume() -> f32 { 0.8 }
+fn default_drum_volume() -> f32 { 0.8 }
+
+impl Default for EffectParams {
+    fn default() -> Self {
+        Self {
+            reverb_amount: 0.3,
+            reverb_damping: 0.4,
+            delay_time: 0.5,    // quarter note
+            delay_feedback: 0.3,
+            delay_tone: 0.6,
+            compressor_amount: 0.0,
+            master_volume: 0.8,
+            drum_saturator_drive: 0.0,
+            synth_saturator_drive: 0.0,
+            drum_volume: 0.8,
+        }
+    }
+}
