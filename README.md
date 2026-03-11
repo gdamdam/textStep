@@ -41,6 +41,7 @@ Ships with **10 demo patterns** ready to play: House, Chicago House, Brit House,
 - macOS with CoreAudio (primary target)
 
 ### Build & Run
+Requires Rust (1.70+). macOS with CoreAudio is the primary target; Linux with ALSA is also supported.
 
 ```bash
 # Clone the repository
@@ -53,9 +54,26 @@ cargo run --release
 ```
 
 ### Run Tests
+On Linux, install ALSA development headers first:
+
+```bash
+sudo apt-get install libasound2-dev   # Debian/Ubuntu
+```
+
+Run the tests:
 
 ```bash
 cargo test    # 23 tests, runs in <1s
+```
+
+### Pre-built Binaries
+
+Pre-built binaries for macOS (ARM, x86_64, universal) and Linux (x86_64) are available from [GitHub Actions](../../actions) artifacts.
+
+**macOS note:** Downloaded binaries will be blocked by Gatekeeper. Remove the quarantine flag before running:
+
+```bash
+xattr -d com.apple.quarantine ./textstep
 ```
 
 ## Quick Manual
