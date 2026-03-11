@@ -1,4 +1,4 @@
-// Key binding reference panel (3-column layout, renders inline below sequencer)
+//! Help overlay: 3-column keyboard shortcut reference panel.
 
 use ratatui::Frame;
 use ratatui::layout::Rect;
@@ -54,6 +54,8 @@ fn row3<'a>(
     Line::from(v)
 }
 
+/// Renders the help panel with three columns of key-binding entries
+/// covering transport, navigation, editing, and pattern management shortcuts.
 pub fn render_help(f: &mut Frame, area: Rect) {
     let block = Block::default()
         .title(" Key Bindings (? to close) ")

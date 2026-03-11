@@ -1,4 +1,4 @@
-// Keyboard input mapping
+//! Keyboard event handler: maps key events to app state changes.
 
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
@@ -10,6 +10,7 @@ use crate::sequencer::project::{NUM_KITS, NUM_PATTERNS};
 use crate::sequencer::synth_pattern::{SynthControlField, MAX_STEPS as SYNTH_MAX_STEPS};
 use crate::sequencer::transport::{PlayState, RecordMode};
 
+/// How much a parameter changes per arrow-key press (0.02 = 50 steps for full range).
 const PARAM_INCREMENT: f32 = 0.02;
 
 /// Map drum pad keys (bottom row) to track indices.

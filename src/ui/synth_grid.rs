@@ -1,4 +1,4 @@
-// Synth step sequencer: 32-step row with note names
+//! Synth step grid: 32-step note sequencer with multi-step note visualization.
 
 use ratatui::Frame;
 use ratatui::layout::Rect;
@@ -14,6 +14,8 @@ use crate::ui::theme;
 /// Track name column width, matching drum grid (padded to longest name "Cowbell")
 const NAME_WIDTH: usize = 9;
 
+/// Renders the synth step row with note names, velocity shading,
+/// multi-step continuation bars, and playhead/cursor highlights.
 pub fn render_synth_grid(f: &mut Frame, area: Rect, app: &App) {
     let focused = app.ui.focus == FocusSection::SynthGrid;
     let border_style = theme::focus_border_style(focused);
@@ -84,7 +86,10 @@ pub fn render_synth_grid(f: &mut Frame, area: Rect, app: &App) {
     let playback_step = app.ui.synth_playback_step;
     let is_playing = app.transport.state == PlayState::Playing;
 
-    let mut covered_until: Option<usize> = None; // end step index of a multi-step note
+    // Multi-step note tracking: `covered_until` holds the last step index covered by
+    // the current note's length. Steps within that range render as continuation bars
+    // (`is_continuation`) instead of new note heads, with an end-cap on the final step.
+    let mut covered_until: Option<usize> = None;
     let mut cover_bg: Option<Color> = None; // background color for continuation cells
 
     for s in 0..MAX_STEPS {

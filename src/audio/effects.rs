@@ -1,14 +1,11 @@
-// Audio effects: Reverb, Delay, Glue Compressor
-// Reverb/Delay ported from zicbox applyReverb.h with adaptations for Rust.
+//! Send effects: Schroeder reverb, tempo-synced delay, tube saturator, RMS glue compressor.
+//! Reverb/delay ported from zicbox applyReverb.h with adaptations for Rust.
 
-// ---------------------------------------------------------------------------
-// Reverb: 4 parallel comb filters + 2 series allpass filters
-// ---------------------------------------------------------------------------
-
-// Base lengths tuned for 44100 Hz; scaled by sample_rate / 44100.0
+// Base comb/allpass lengths tuned for 44100 Hz; scaled by sample_rate / 44100.0
 const BASE_COMB_LENGTHS: [usize; 4] = [1117, 1301, 1571, 1787];
 const BASE_ALLPASS_LENGTHS: [usize; 2] = [557, 443];
 
+/// Schroeder reverb: 4 parallel comb filters feeding 2 series allpass filters.
 pub struct ReverbEffect {
     comb_buf: Vec<f32>,
     comb_lengths: [usize; 4],

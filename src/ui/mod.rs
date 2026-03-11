@@ -1,3 +1,5 @@
+//! Top-level render dispatch: computes layout, renders all sections, handles modals.
+
 pub mod drum_grid;
 pub mod help_overlay;
 pub mod knobs;

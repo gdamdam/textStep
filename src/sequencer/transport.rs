@@ -1,5 +1,6 @@
-// Transport state, BPM, loop config
+//! Transport state: play/pause/stop, BPM, loop configuration, swing amount.
 
+/// Sequencer playback state.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum PlayState {
     Stopped,
@@ -13,6 +14,7 @@ pub enum RecordMode {
     On,
 }
 
+/// Per-section loop length settings (8/16/24/32 steps for drum and synth independently).
 #[derive(Clone, Copy, Debug)]
 pub struct LoopConfig {
     pub enabled: bool,
@@ -30,6 +32,7 @@ impl Default for LoopConfig {
     }
 }
 
+/// Master transport: play state, tempo (BPM), record mode, loop config, and swing.
 #[derive(Clone, Copy, Debug)]
 pub struct Transport {
     pub state: PlayState,

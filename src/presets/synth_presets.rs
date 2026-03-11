@@ -1,3 +1,5 @@
+//! Synth sound presets: pads, leads, basses, keys, and FX organized by category.
+
 use crate::sequencer::synth_pattern::SynthParams;
 use super::SynthSoundPreset;
 

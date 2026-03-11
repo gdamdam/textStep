@@ -1,3 +1,5 @@
+//! Hand-crafted drum sound presets organized by category (808, 909, Acoustic, Lo-Fi, etc.).
+
 use crate::sequencer::drum_pattern::DrumTrackId;
 use crate::sequencer::project::DrumSoundParams;
 use super::DrumSoundPreset;

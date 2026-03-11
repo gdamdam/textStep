@@ -1,3 +1,5 @@
+//! Entry point: spawns audio thread, runs UI event loop with ~60fps rendering.
+
 mod app;
 mod audio;
 mod keys;
@@ -18,6 +20,9 @@ use crossterm::terminal::{self, EnterAlternateScreen, LeaveAlternateScreen};
 use ratatui::backend::CrosstermBackend;
 use ratatui::Terminal;
 
+/// Sets up cross-thread channels, starts the audio stream, initializes the
+/// terminal, and enters the main UI loop. The audio stream is kept alive
+/// until this function returns.
 fn main() -> io::Result<()> {
     // Create channels for UI <-> Audio communication
     let (tx_to_audio, rx_from_ui) = crossbeam_channel::bounded(64);

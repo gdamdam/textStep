@@ -1,4 +1,4 @@
-// Splash screen: Hardware-themed boot sequence with amber/cyan palette
+//! Splash screen animation: typewriter logo, matrix rain reveal, boot sequence.
 
 use ratatui::Frame;
 use ratatui::layout::Rect;
@@ -54,6 +54,8 @@ fn logo_total_chars() -> usize {
     line.chars().count() * LOGO_ROWS
 }
 
+/// Draws the splash screen: animated block-letter logo with typewriter effect,
+/// matrix rain columns, and a simulated boot log sequence.
 pub fn render_splash(f: &mut Frame, area: Rect, splash: &SplashState) {
     match splash.phase {
         SplashPhase::SlideIn | SplashPhase::Hold => {

@@ -1,3 +1,5 @@
+//! Synth pattern presets: melodic sequences organized by genre and style.
+
 use crate::sequencer::synth_pattern::MAX_STEPS;
 
 pub struct SynthPatternPreset {

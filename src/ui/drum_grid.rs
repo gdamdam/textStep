@@ -1,4 +1,4 @@
-// Drum step grid widget (8x32) with spaced squares and hardware borders
+//! Drum step grid: 8 tracks x 32 steps with playhead, cursor, and mute/solo indicators.
 
 use ratatui::Frame;
 use ratatui::layout::Rect;
@@ -14,6 +14,8 @@ use crate::ui::theme;
 /// Track name column: ">Cowbell " or " Cowbell " = 9 chars (padded to longest name)
 const NAME_WIDTH: usize = 9;
 
+/// Renders the 8-track drum grid with step indicators, track names,
+/// mute/solo buttons, playhead column, and cursor highlight.
 pub fn render_drum_grid(f: &mut Frame, area: Rect, app: &App) {
     let focused_grid = app.ui.focus == FocusSection::DrumGrid;
     let border_style = theme::focus_border_style(focused_grid);

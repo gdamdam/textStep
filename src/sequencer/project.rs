@@ -1,4 +1,5 @@
-// Project: bundles a drum kit + 10 patterns into a single saveable unit.
+//! Project serialization: bundles kit sounds, synth parameters, and 10 patterns
+//! as JSON (.tsp files).
 
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;

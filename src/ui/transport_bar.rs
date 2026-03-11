@@ -1,5 +1,4 @@
-// Play/Pause/Stop, BPM display, LED, loop controls, pattern indicator
-// Hardware/Synthwave themed transport bar
+//! Transport control bar: play/pause state, BPM, beat LEDs, swing, pattern/kit selectors.
 
 use ratatui::Frame;
 use ratatui::layout::Rect;
@@ -15,6 +14,8 @@ use crate::ui::theme;
 const PATTERN_KEYS: [char; 10] = ['q', 'w', 'e', 'r', 't', 'y', 'u', 'i', 'o', 'p'];
 const KIT_KEYS: [char; 8] = ['1', '2', '3', '4', '5', '6', '7', '8'];
 
+/// Draws the transport bar: play state, BPM, beat LEDs, swing, record toggle,
+/// pattern/kit selectors, loop indicators, and master level gauges.
 pub fn render_transport(f: &mut Frame, area: Rect, app: &App) {
     let focused = app.ui.focus == FocusSection::Transport;
     let border_style = theme::focus_border_style(focused);

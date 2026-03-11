@@ -1,7 +1,9 @@
-// Shared parameter types
+//! Shared effect parameters used by both UI and audio engine.
 
 use serde::{Deserialize, Serialize};
 
+/// Master effect and mix bus parameters, serialized with each project.
+/// All values are normalized to 0.0..1.0.
 #[derive(Clone, Copy, Debug, Serialize, Deserialize)]
 pub struct EffectParams {
     pub reverb_amount: f32,      // 0.0-1.0: feedback/decay

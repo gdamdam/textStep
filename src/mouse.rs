@@ -1,4 +1,5 @@
-// Mouse input handling
+//! Mouse event handler. Hit-testing layout MUST mirror ui/mod.rs — uses shared
+//! constants from ui/layout.rs.
 
 use std::time::Instant;
 
@@ -18,7 +19,8 @@ const DOUBLE_CLICK_MS: u128 = 300;
 /// 0.04 = full range in ~25 rows of drag.
 const DRAG_SENSITIVITY: f32 = 0.04;
 
-/// Main mouse event handler.
+/// Routes mouse events (click, scroll, drag) to the appropriate UI section.
+/// Layout rectangles are recomputed from `term_size` to match rendering.
 pub fn handle_mouse(app: &mut App, event: MouseEvent, term_size: Rect) {
     // Ignore mouse during splash or modals
     if app.ui.splash.phase != crate::app::SplashPhase::Done {

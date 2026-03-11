@@ -1,3 +1,5 @@
+//! Drum pattern presets: genre-specific step patterns (House, Techno, DnB, etc.).
+
 use crate::sequencer::drum_pattern::NUM_DRUM_TRACKS;
 
 pub struct PatternPreset {

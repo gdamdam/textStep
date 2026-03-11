@@ -1,10 +1,12 @@
-// UiToAudio and AudioToUi message enums
+//! Lock-free message types for cross-thread communication between UI and audio.
 
 use crate::params::EffectParams;
 use crate::sequencer::drum_pattern::{DrumPattern, DrumTrackId};
 use crate::sequencer::synth_pattern::SynthPattern;
 use crate::sequencer::transport::Transport;
 
+/// Commands sent from the UI thread to the audio thread.
+/// Sent via a bounded crossbeam channel (capacity 64).
 pub enum UiToAudio {
     SetTransport(Transport),
     SetDrumPattern(DrumPattern),
@@ -15,6 +17,8 @@ pub enum UiToAudio {
     ReleaseSynth,             // release synth envelopes
 }
 
+/// Notifications sent from the audio thread back to the UI.
+/// Sent via a bounded crossbeam channel (capacity 16).
 pub enum AudioToUi {
     PlaybackPosition {
         global_step: usize,

@@ -1,5 +1,5 @@
-// Paraphonic 2-oscillator synthesizer voice with sub oscillator.
-// Hand-rolled DSP — no external crate dependencies.
+//! Polyphonic synth voice: dual oscillators, sub, noise, 2 ADSR envelopes,
+//! SVF filter, tempo-synced LFO. Hand-rolled DSP, no external crate dependencies.
 
 use crate::sequencer::synth_pattern::SynthParams;
 
@@ -368,9 +368,8 @@ impl Filter24dB {
     }
 }
 
-// ---------------------------------------------------------------------------
-// SynthVoice — paraphonic 2-oscillator + sub
-// ---------------------------------------------------------------------------
+/// Paraphonic synthesizer voice with dual oscillators, sub oscillator,
+/// two ADSR envelopes (amplitude + filter), and a state-variable filter.
 pub struct SynthVoice {
     sample_rate: f32,
     osc1: Oscillator,

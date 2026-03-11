@@ -1,3 +1,6 @@
+//! Preset browser: categories, merge modes, and state machine for browsing
+//! drum/synth sound and pattern presets.
+
 pub mod drum_presets;
 pub mod pattern_presets;
 pub mod synth_pattern_presets;
@@ -24,8 +27,7 @@ pub struct SynthSoundPreset {
     pub params: SynthParams,
 }
 
-// ── Preset Browser State ─────────────────────────────────────────────────────
-
+/// Which kind of preset the browser is targeting.
 #[derive(Clone, Debug, PartialEq)]
 pub enum PresetTarget {
     DrumSound(usize), // track index
@@ -40,6 +42,7 @@ pub enum PatternMergeMode {
     Layer,
 }
 
+/// State machine for the preset browser modal: tracks target, category, and selection index.
 #[derive(Clone, Debug, PartialEq)]
 pub struct PresetBrowserState {
     pub target: PresetTarget,

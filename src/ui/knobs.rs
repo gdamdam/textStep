@@ -1,4 +1,4 @@
-// Knobs panel: vertical slider bars for the selected drum track's parameters
+//! Drum parameter panel: vertical slider bars for the selected track's sound parameters.
 
 use ratatui::Frame;
 use ratatui::layout::Rect;
@@ -19,6 +19,8 @@ const SLIDER_LABELS: [&str; 11] = [
 /// Number of vertical bar rows in each slider.
 const BAR_ROWS: usize = 5;
 
+/// Renders vertical slider columns for the currently selected drum track's
+/// parameters (Tune, Sweep, Color, Snap, Filter, Drive, Decay, Volume, etc.).
 pub fn render_knobs(f: &mut Frame, area: Rect, app: &App) {
     let focused = app.ui.focus == FocusSection::Knobs;
     let border_style = theme::focus_border_style(focused);

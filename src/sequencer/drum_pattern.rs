@@ -1,8 +1,9 @@
-// DrumPattern: 8 tracks x 32 steps
+//! Drum pattern data: 8 tracks x 32 steps with per-track synthesis parameters.
 
 pub const NUM_DRUM_TRACKS: usize = 8;
 pub const MAX_STEPS: usize = 32;
 
+/// Identifies one of the 8 drum tracks (Kick, Snare, CHH, OHH, Ride, Clap, Cowbell, Tom).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum DrumTrackId {
     Kick = 0,
@@ -135,6 +136,7 @@ pub const TRACK_IDS: [DrumTrackId; NUM_DRUM_TRACKS] = [
     DrumTrackId::Tom,
 ];
 
+/// A drum pattern: 8 tracks of boolean step data plus per-track synthesis parameters.
 #[derive(Clone, Copy, Debug)]
 pub struct DrumPattern {
     pub steps: [[bool; MAX_STEPS]; NUM_DRUM_TRACKS],

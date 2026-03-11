@@ -1,11 +1,10 @@
-// SynthPattern: monophonic synth sequencer data model
+//! Synth pattern data: 32 steps with note/velocity/length, plus full synth parameter set.
 
 use serde::{Serialize, Deserialize};
 
 pub const MAX_STEPS: usize = 32;
 
-// --- SynthStep ---
-
+/// A single synth sequencer step: MIDI note, velocity (0 = off), and length in steps.
 #[derive(Clone, Copy, Debug, Serialize, Deserialize)]
 pub struct SynthStep {
     pub note: u8,     // MIDI note number (0-127). 60 = C4
@@ -42,8 +41,8 @@ impl SynthStep {
     }
 }
 
-// --- SynthParams ---
-
+/// Complete synth parameter set: dual oscillators, sub, two ADSR envelopes,
+/// filter with its own envelope, LFO routing, and send effect levels.
 #[derive(Clone, Copy, Debug, Serialize, Deserialize)]
 pub struct SynthParams {
     // Oscillator 1

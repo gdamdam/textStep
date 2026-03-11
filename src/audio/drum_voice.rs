@@ -1,5 +1,6 @@
-// Drum voice trait and all 8 voice implementations
-// Hand-rolled DSP — no external crate dependencies.
+//! Drum voice DSP implementations (8 tracks).
+//! All synthesis is hand-rolled: oscillators, filters, envelopes, noise.
+//! No external DSP crate dependencies.
 
 use crate::sequencer::drum_pattern::DrumTrackParams;
 

@@ -1,4 +1,4 @@
-// AudioEngine: cpal callback, voice mixing, send effects, message handling
+//! Audio engine: cpal callback, voice management, LFO, message dispatch.
 
 use std::sync::Arc;
 
@@ -16,9 +16,8 @@ use crate::sequencer::drum_pattern::{DrumPattern, DrumTrackId, NUM_DRUM_TRACKS};
 use crate::sequencer::synth_pattern::{SynthPattern, LFO_DEST_FIELDS, lfo_division_multiplier};
 use crate::sequencer::transport::{PlayState, Transport};
 
-// ---------------------------------------------------------------------------
-// LFO: tempo-synced, global (shared across synth voices)
-// ---------------------------------------------------------------------------
+/// Tempo-synced global LFO shared across synth voices.
+/// Supports sine, triangle, saw (up/down), square, and exponential decay waveforms.
 struct Lfo {
     phase: f64,
 }
@@ -76,6 +75,8 @@ impl Lfo {
     }
 }
 
+/// Core audio engine running on the audio thread.
+/// Owns all voices, effects, the sequencer clock, and handles messages from the UI thread.
 pub struct AudioEngine {
     sample_rate: f64,
     clock: SequencerClock,

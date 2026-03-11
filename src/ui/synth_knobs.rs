@@ -1,4 +1,4 @@
-// Synth knobs panel: grouped layout with vertical sliders and packed ADSR bars
+//! Synth parameter panel: grouped knobs for OSC, ENV, FILT, LFO, and AMP sections.
 
 use ratatui::Frame;
 use ratatui::layout::{Constraint, Direction, Layout, Rect};
@@ -14,6 +14,9 @@ use crate::ui::theme;
 const SLIDER_ROWS: usize = 5;
 
 // ── Row group definitions ────────────────────────────────────────────────────
+// Each constant below lists the `SynthControlField` variants for one sub-section.
+// These arrays drive both the rendering order in `render_synth_knobs` and the
+// keyboard/mouse navigation mapping in `mouse.rs`, so both files must stay in sync.
 
 const OSC1_SLIDERS: &[SynthControlField] = &[
     SynthControlField::Osc1Tune,
@@ -61,6 +64,8 @@ const ADSR_LABELS: &[&str] = &["A", "D", "S", "R"];
 
 // ── Main render ──────────────────────────────────────────────────────────────
 
+/// Renders the synth parameter panel with grouped slider/ADSR sections
+/// laid out in four row groups: OSC, ENV+FILT, LFO, and AMP.
 pub fn render_synth_knobs(f: &mut Frame, area: Rect, app: &App) {
     let focused = app.ui.focus == FocusSection::SynthControls;
     let border_style = theme::focus_border_style(focused);
