@@ -1,6 +1,6 @@
 ```
 T E X T S T E P
-
+```
 
 A terminal-based step sequencer, drum machine, and synthesizer built in Rust.
 All DSP from scratch — no samples, no external audio libraries. Just your terminal and your speakers.
